@@ -1,19 +1,23 @@
 use crate::http::{ApiContext, Result};
-use anyhow::Context;
+use anyhow::{anyhow, Context};
 use argon2::password_hash::SaltString;
 use argon2::{Argon2, PasswordHash};
+use axum::body::HttpBody;
 use axum::extract::Extension;
 use axum::routing::{get, post};
 use axum::{Json, Router};
+use base64::{engine::general_purpose, Engine as _};
+use hyper::Client;
+use hyper_tls::HttpsConnector;
 
 use crate::http::error::{Error, ResultExt};
 use crate::http::extractor::AuthUser;
 
 pub fn router() -> Router {
     Router::new()
-        .route("/api/users", post(create_user))
-        .route("/api/users/login", post(login_user))
-        .route("/api/me", get(get_current_user).put(update_user))
+        .route("/v1/users", post(create_user))
+        .route("/v1/users/login", post(login_user))
+        .route("/v1/me", get(get_current_user).put(update_user))
 }
 
 /// A wrapper type for all requests/responses from this module.
@@ -41,7 +45,6 @@ struct UpdateUser {
     email: Option<String>,
     username: Option<String>,
     password: Option<String>,
-    image: Option<String>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -58,11 +61,16 @@ async fn create_user(
 ) -> Result<Json<UserBody<User>>> {
     let password_hash = hash_password(req.user.password).await?;
 
+    let image = get_base64_encoded_svg_image_for_user(&req.user.email)
+        .await
+        .map_err(|e| Error::Anyhow(anyhow!("failed to get user image: {}", e)))?;
+
     let user_id = sqlx::query_scalar!(
-        r#"insert into "user" (username, email, password_hash) values ($1, $2, $3) returning id"#,
+        r#"insert into "user" (username, email, image, password_hash) values ($1, $2, $3, $4) returning id"#,
         req.user.username,
         req.user.email,
-        password_hash
+        image,
+        password_hash,
     )
     .fetch_one(&ctx.db)
     .await
@@ -81,7 +89,7 @@ async fn create_user(
             }
             .to_jwt(&ctx),
             username: req.user.username,
-            image: None,
+            image: Some(image),
         },
     }))
 }
@@ -162,15 +170,13 @@ async fn update_user(
             update "user"
             set email = coalesce($1, "user".email),
                 username = coalesce($2, "user".username),
-                password_hash = coalesce($3, "user".password_hash),
-                image = coalesce($4, "user".image)
-            where id = $5
+                password_hash = coalesce($3, "user".password_hash)
+            where id = $4
             returning email, username, image
         "#,
         req.user.email,
         req.user.username,
         password_hash,
-        req.user.image,
         auth_user.user_id.clone().into_sqlx_uuid()
     )
     .fetch_one(&ctx.db)
@@ -216,4 +222,29 @@ async fn verify_password(password: String, password_hash: String) -> Result<()> 
     })
     .await
     .context("panic in verifying password hash")??)
+}
+
+async fn get_base64_encoded_svg_image_for_user(email: &String) -> Result<String> {
+    let https = HttpsConnector::new();
+    let client = Client::builder().build::<_, hyper::Body>(https);
+    let mut res = client
+        .get(
+            format!("https://joesch.moe/api/male/v1/{email}")
+                .parse()
+                .map_err(|_| Error::Anyhow(anyhow!("failed to parse profile picture uri")))?,
+        )
+        .await
+        .map_err(|e| Error::Anyhow(anyhow!("failed to get profile picture {}", e)))?;
+
+    let mut full_body: Vec<u8> = Vec::new();
+    while let Some(chunk) = res.body_mut().data().await {
+        let mut chunk = chunk
+            .map_err(|e| Error::Anyhow(anyhow!("chunk fail {}", e)))?
+            .into_iter()
+            .collect::<Vec<u8>>();
+        full_body.append(&mut chunk);
+    }
+    let encoded = general_purpose::STANDARD.encode(&full_body);
+
+    Ok(encoded)
 }
