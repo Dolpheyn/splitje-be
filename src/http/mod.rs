@@ -4,6 +4,10 @@ use axum::{extract::Extension, Router};
 use sqlx::PgPool;
 use std::sync::Arc;
 use tower::ServiceBuilder;
+use tower_http::{
+    request_id::{MakeRequestId, RequestId},
+    ServiceBuilderExt,
+};
 
 // Utility modules.
 
@@ -29,13 +33,14 @@ mod types;
 // are more stream-of-consciousness and assume you read them in a particular order.
 //
 // See `api_router()` below for the recommended order.
+mod groups;
 mod users;
 
 pub use error::{Error, ResultExt};
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
-use tower_http::trace::TraceLayer;
+use tower_http::trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer};
 
 /// The core type through which handler functions can access common API state.
 ///
@@ -51,9 +56,20 @@ use tower_http::trace::TraceLayer;
 /// on and off, and disable any unused extension objects) but it's really up to a
 /// judgement call.
 #[derive(Clone)]
-struct ApiContext {
+pub struct ApiContext {
     config: Arc<Config>,
     db: PgPool,
+}
+
+#[derive(Clone, Default)]
+struct UuidRequestId;
+
+impl MakeRequestId for UuidRequestId {
+    fn make_request_id<B>(&mut self, _: &http::Request<B>) -> Option<RequestId> {
+        Some(RequestId::new(
+            uuid::Uuid::new_v4().to_string().parse().unwrap(),
+        ))
+    }
 }
 
 pub async fn serve(config: Config, db: PgPool) -> anyhow::Result<()> {
@@ -76,8 +92,14 @@ pub async fn serve(config: Config, db: PgPool) -> anyhow::Result<()> {
                 config: Arc::new(config),
                 db,
             }))
+            .set_x_request_id(UuidRequestId::default())
+            .propagate_x_request_id()
             // Enables logging. Use `RUST_LOG=tower_http=debug`
-            .layer(TraceLayer::new_for_http()),
+            .layer(
+                TraceLayer::new_for_http()
+                    .make_span_with(DefaultMakeSpan::new().include_headers(true))
+                    .on_response(DefaultOnResponse::new().include_headers(true)),
+            ),
     );
 
     // We use 8080 as our default HTTP server port, it's pretty easy to remember.
@@ -92,5 +114,5 @@ pub async fn serve(config: Config, db: PgPool) -> anyhow::Result<()> {
 
 fn api_router() -> Router {
     // This is the order that the modules were authored in.
-    users::router()
+    Router::new().nest("/api", users::router().merge(groups::router()))
 }

@@ -3,7 +3,7 @@ use anyhow::{anyhow, Context};
 use argon2::password_hash::SaltString;
 use argon2::{Argon2, PasswordHash};
 use axum::body::HttpBody;
-use axum::extract::Extension;
+use axum::extract::{Extension, Path};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use base64::{engine::general_purpose, Engine as _};
@@ -13,9 +13,13 @@ use hyper_tls::HttpsConnector;
 use crate::http::error::{Error, ResultExt};
 use crate::http::extractor::AuthUser;
 
+use super::extractor::{to_sqlx_uuid, to_uuid};
+use super::groups::{self, Group, GroupBody};
+
 pub fn router() -> Router {
     Router::new()
         .route("/v1/users", post(create_user))
+        .route("/v1/users/:user_id/groups", get(get_user_groups))
         .route("/v1/users/login", post(login_user))
         .route("/v1/me", get(get_current_user).put(update_user))
 }
@@ -49,6 +53,7 @@ struct UpdateUser {
 
 #[derive(serde::Serialize, serde::Deserialize)]
 struct User {
+    id: String,
     email: String,
     token: String,
     username: String,
@@ -66,7 +71,7 @@ async fn create_user(
         .map_err(|e| Error::Anyhow(anyhow!("failed to get user image: {}", e)))?;
 
     let user_id = sqlx::query_scalar!(
-        r#"insert into "user" (username, email, image, password_hash) values ($1, $2, $3, $4) returning id"#,
+        r#"insert into "users" (username, email, image, password_hash) values ($1, $2, $3, $4) returning id"#,
         req.user.username,
         req.user.email,
         image,
@@ -74,18 +79,19 @@ async fn create_user(
     )
     .fetch_one(&ctx.db)
     .await
-    .on_constraint("user_username_key", |_| {
+    .on_constraint("users_username_key", |_| {
         Error::unprocessable_entity([("username", "username taken")])
     })
-    .on_constraint("user_email_key", |_| {
+    .on_constraint("users_email_key", |_| {
         Error::unprocessable_entity([("email", "email taken")])
     })?;
 
     Ok(Json(UserBody {
         user: User {
+            id: user_id.to_string(),
             email: req.user.email,
             token: AuthUser {
-                user_id: user_id.into(),
+                user_id: to_uuid(user_id),
             }
             .to_jwt(&ctx),
             username: req.user.username,
@@ -101,7 +107,7 @@ async fn login_user(
     let user = sqlx::query!(
         r#"
             select id, email, username, image, password_hash 
-            from "user" where email = $1
+            from "users" where email = $1
         "#,
         req.user.email,
     )
@@ -113,9 +119,10 @@ async fn login_user(
 
     Ok(Json(UserBody {
         user: User {
+            id: user.id.to_string(),
             email: user.email,
             token: AuthUser {
-                user_id: user.id.into(),
+                user_id: to_uuid(user.id),
             }
             .to_jwt(&ctx),
             username: user.username,
@@ -129,8 +136,8 @@ async fn get_current_user(
     ctx: Extension<ApiContext>,
 ) -> Result<Json<UserBody<User>>> {
     let user = sqlx::query!(
-        r#"select email, username, image from "user" where id = $1"#,
-        auth_user.user_id.clone().into_sqlx_uuid()
+        r#"select email, username, image from "users" where id = $1"#,
+        to_sqlx_uuid(auth_user.user_id)
     )
     .fetch_one(&ctx.db)
     .await
@@ -139,8 +146,10 @@ async fn get_current_user(
         e => Error::Sqlx(e),
     })?;
 
+    dbg!("auth user", auth_user.clone());
     Ok(Json(UserBody {
         user: User {
+            id: auth_user.user_id.to_string(),
             email: user.email,
             token: auth_user.to_jwt(&ctx),
             username: user.username,
@@ -150,8 +159,8 @@ async fn get_current_user(
 }
 
 async fn update_user(
-    auth_user: AuthUser,
     ctx: Extension<ApiContext>,
+    auth_user: AuthUser,
     Json(req): Json<UserBody<UpdateUser>>,
 ) -> Result<Json<UserBody<User>>> {
     if req.user == UpdateUser::default() {
@@ -167,17 +176,17 @@ async fn update_user(
     let user = sqlx::query!(
         // Optional updates of fields without needing a separate query for each.
         r#"
-            update "user"
-            set email = coalesce($1, "user".email),
-                username = coalesce($2, "user".username),
-                password_hash = coalesce($3, "user".password_hash)
+            update "users"
+            set email = coalesce($1, "users".email),
+                username = coalesce($2, "users".username),
+                password_hash = coalesce($3, "users".password_hash)
             where id = $4
-            returning email, username, image
+            returning id, email, username, image
         "#,
         req.user.email,
         req.user.username,
         password_hash,
-        auth_user.user_id.clone().into_sqlx_uuid()
+        to_sqlx_uuid(auth_user.user_id)
     )
     .fetch_one(&ctx.db)
     .await
@@ -190,12 +199,20 @@ async fn update_user(
 
     Ok(Json(UserBody {
         user: User {
+            id: user.id.to_string(),
             email: user.email,
             token: auth_user.to_jwt(&ctx),
             username: user.username,
             image: user.image,
         },
     }))
+}
+
+async fn get_user_groups(
+    ctx: Extension<ApiContext>,
+    Path(user_id): Path<String>,
+) -> Result<Json<GroupBody<Vec<Group>>>> {
+    Ok(groups::get_groups_by_user(ctx, Path(user_id)).await?)
 }
 
 async fn hash_password(password: String) -> Result<String> {
@@ -229,22 +246,29 @@ async fn get_base64_encoded_svg_image_for_user(email: &String) -> Result<String>
     let client = Client::builder().build::<_, hyper::Body>(https);
     let mut res = client
         .get(
-            format!("https://joesch.moe/api/male/v1/{email}")
+            format!("https://joesch.moe/api/v1/male/{email}")
                 .parse()
                 .map_err(|_| Error::Anyhow(anyhow!("failed to parse profile picture uri")))?,
         )
         .await
         .map_err(|e| Error::Anyhow(anyhow!("failed to get profile picture {}", e)))?;
 
-    let mut full_body: Vec<u8> = Vec::new();
-    while let Some(chunk) = res.body_mut().data().await {
-        let mut chunk = chunk
-            .map_err(|e| Error::Anyhow(anyhow!("chunk fail {}", e)))?
-            .into_iter()
-            .collect::<Vec<u8>>();
-        full_body.append(&mut chunk);
-    }
-    let encoded = general_purpose::STANDARD.encode(&full_body);
+    let status = res.status();
+    if status.is_success() {
+        let mut full_body: Vec<u8> = Vec::new();
+        while let Some(chunk) = res.body_mut().data().await {
+            let mut chunk = chunk
+                .map_err(|e| Error::Anyhow(anyhow!("chunk fail {}", e)))?
+                .into_iter()
+                .collect::<Vec<u8>>();
+            full_body.append(&mut chunk);
+        }
+        let encoded = general_purpose::STANDARD.encode(&full_body);
 
-    Ok(encoded)
+        Ok(encoded)
+    } else {
+        Err(Error::Anyhow(anyhow!(
+            "get profile picture return err. err={status}",
+        )))
+    }
 }

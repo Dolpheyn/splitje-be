@@ -11,25 +11,12 @@ use jwt::{SignWithKey, VerifyWithKey};
 use sha2::Sha384;
 use time::OffsetDateTime;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug)]
-pub struct Uuid(pub sqlx::types::uuid::Bytes);
-
-impl Uuid {
-    pub fn into_sqlx_uuid(self) -> sqlx::types::Uuid {
-        self.into()
-    }
+pub fn to_sqlx_uuid(id: uuid::Uuid) -> sqlx::types::Uuid {
+    sqlx::types::Uuid::from_bytes(*id.as_bytes())
 }
 
-impl From<sqlx::types::Uuid> for Uuid {
-    fn from(value: sqlx::types::Uuid) -> Self {
-        Self(value.into_bytes())
-    }
-}
-
-impl Into<sqlx::types::Uuid> for Uuid {
-    fn into(self) -> sqlx::types::Uuid {
-        sqlx::types::Uuid::from_bytes(self.0)
-    }
+pub fn to_uuid(id: sqlx::types::Uuid) -> uuid::Uuid {
+    uuid::Uuid::from_bytes(*id.as_bytes())
 }
 
 const DEFAULT_SESSION_LENGTH: time::Duration = time::Duration::weeks(2);
@@ -39,9 +26,9 @@ const SCHEME_PREFIX: &str = "Bearer ";
 /// Add this as a parameter to a handler function to require the user to be logged in.
 ///
 /// Parses a JWT from the `Authorization: Token <token>` header.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct AuthUser {
-    pub user_id: Uuid,
+    pub user_id: uuid::Uuid,
 }
 
 /// Add this as a parameter to a handler function to optionally check if the user is logged in.
@@ -55,7 +42,7 @@ pub struct MaybeAuthUser(pub Option<AuthUser>);
 
 #[derive(serde::Serialize, serde::Deserialize)]
 struct AuthUserClaims {
-    user_id: Uuid,
+    user_id: uuid::Uuid,
     /// Standard JWT `exp` claim.
     exp: i64,
 }
@@ -153,7 +140,7 @@ impl AuthUser {
 
 impl MaybeAuthUser {
     /// If this is `Self(Some(AuthUser))`, return `AuthUser::user_id`
-    pub fn user_id(&self) -> Option<Uuid> {
+    pub fn user_id(&self) -> Option<uuid::Uuid> {
         self.0.as_ref().map(|auth_user| auth_user.user_id)
     }
 }

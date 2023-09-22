@@ -1,8 +1,4 @@
--- As a style choice, we prefer to avoid plurals in table names, mainly because it makes queries read better.
---
--- For our user table, quoting the table name is recommended by IntelliJ's tooling because `user` is a keyword,
--- though Postgres seems to handle it fine in most contexts either way.
-create table "user"
+create table "users"
 (
     -- Having the table name as part of the primary key column makes it nicer to write joins, e.g.:
     --
@@ -42,4 +38,4 @@ create table "user"
 );
 
 -- And applying our `updated_at` trigger is as easy as this.
-SELECT trigger_updated_at('"user"');
+SELECT trigger_updated_at('"users"');
