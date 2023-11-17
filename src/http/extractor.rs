@@ -26,7 +26,7 @@ const SCHEME_PREFIX: &str = "Bearer ";
 /// Add this as a parameter to a handler function to require the user to be logged in.
 ///
 /// Parses a JWT from the `Authorization: Token <token>` header.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct AuthUser {
     pub user_id: uuid::Uuid,
 }

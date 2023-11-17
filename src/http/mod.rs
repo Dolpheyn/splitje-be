@@ -34,6 +34,7 @@ mod types;
 //
 // See `api_router()` below for the recommended order.
 mod groups;
+mod transactions;
 mod users;
 
 pub use error::{Error, ResultExt};
@@ -114,5 +115,11 @@ pub async fn serve(config: Config, db: PgPool) -> anyhow::Result<()> {
 
 fn api_router() -> Router {
     // This is the order that the modules were authored in.
-    Router::new().nest("/api", users::router().merge(groups::router()))
+    Router::new().nest(
+        "/api",
+        Router::new()
+            .merge(users::router())
+            .merge(groups::router())
+            .merge(transactions::router()),
+    )
 }

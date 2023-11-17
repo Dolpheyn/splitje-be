@@ -26,8 +26,8 @@ pub fn router() -> Router {
 
 /// A wrapper type for all requests/responses from this module.
 #[derive(serde::Serialize, serde::Deserialize)]
-struct UserBody<T> {
-    user: T,
+pub struct UserBody<T> {
+    pub user: T,
 }
 
 #[derive(serde::Deserialize)]
@@ -52,7 +52,7 @@ struct UpdateUser {
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
-struct User {
+struct CurrentUser {
     id: String,
     email: String,
     token: String,
@@ -60,10 +60,17 @@ struct User {
     image: Option<String>,
 }
 
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct User {
+    pub id: uuid::Uuid,
+    pub email: String,
+    pub username: String,
+}
+
 async fn create_user(
     ctx: Extension<ApiContext>,
     Json(req): Json<UserBody<NewUser>>,
-) -> Result<Json<UserBody<User>>> {
+) -> Result<Json<UserBody<CurrentUser>>> {
     let password_hash = hash_password(req.user.password).await?;
 
     let image = get_base64_encoded_svg_image_for_user(&req.user.email)
@@ -87,7 +94,7 @@ async fn create_user(
     })?;
 
     Ok(Json(UserBody {
-        user: User {
+        user: CurrentUser {
             id: user_id.to_string(),
             email: req.user.email,
             token: AuthUser {
@@ -103,7 +110,7 @@ async fn create_user(
 async fn login_user(
     ctx: Extension<ApiContext>,
     Json(req): Json<UserBody<LoginUser>>,
-) -> Result<Json<UserBody<User>>> {
+) -> Result<Json<UserBody<CurrentUser>>> {
     let user = sqlx::query!(
         r#"
             select id, email, username, image, password_hash 
@@ -118,7 +125,7 @@ async fn login_user(
     verify_password(req.user.password, user.password_hash).await?;
 
     Ok(Json(UserBody {
-        user: User {
+        user: CurrentUser {
             id: user.id.to_string(),
             email: user.email,
             token: AuthUser {
@@ -134,7 +141,7 @@ async fn login_user(
 async fn get_current_user(
     auth_user: AuthUser,
     ctx: Extension<ApiContext>,
-) -> Result<Json<UserBody<User>>> {
+) -> Result<Json<UserBody<CurrentUser>>> {
     let user = sqlx::query!(
         r#"select email, username, image from "users" where id = $1"#,
         to_sqlx_uuid(auth_user.user_id)
@@ -148,7 +155,7 @@ async fn get_current_user(
 
     dbg!("auth user", auth_user.clone());
     Ok(Json(UserBody {
-        user: User {
+        user: CurrentUser {
             id: auth_user.user_id.to_string(),
             email: user.email,
             token: auth_user.to_jwt(&ctx),
@@ -162,7 +169,7 @@ async fn update_user(
     ctx: Extension<ApiContext>,
     auth_user: AuthUser,
     Json(req): Json<UserBody<UpdateUser>>,
-) -> Result<Json<UserBody<User>>> {
+) -> Result<Json<UserBody<CurrentUser>>> {
     if req.user == UpdateUser::default() {
         return get_current_user(auth_user, ctx).await;
     }
@@ -198,7 +205,7 @@ async fn update_user(
     })?;
 
     Ok(Json(UserBody {
-        user: User {
+        user: CurrentUser {
             id: user.id.to_string(),
             email: user.email,
             token: auth_user.to_jwt(&ctx),
@@ -210,9 +217,21 @@ async fn update_user(
 
 async fn get_user_groups(
     ctx: Extension<ApiContext>,
-    Path(user_id): Path<String>,
+    auth_user: AuthUser,
+    Path(user_id): Path<uuid::Uuid>,
 ) -> Result<Json<GroupBody<Vec<Group>>>> {
-    Ok(groups::get_groups_by_user(ctx, Path(user_id)).await?)
+    Ok(groups::get_groups_by_user(ctx, auth_user, Path(user_id)).await?)
+}
+
+pub async fn is_user_in_group(
+    ctx: Extension<ApiContext>,
+    Path(user_id): Path<uuid::Uuid>,
+    Path(group_id): Path<uuid::Uuid>,
+) -> Result<Json<bool>> {
+    let user_groups = groups::get_groups_by_user(ctx, AuthUser { user_id }, Path(user_id))
+        .await?
+        .0;
+    Ok(Json(user_groups.group.iter().any(|g| g.id == group_id)))
 }
 
 async fn hash_password(password: String) -> Result<String> {

@@ -14,10 +14,11 @@ create table "user_groups"
     --
     -- We're not doing that here since the Realworld spec doesn't implement a search function for users.
     user_id      uuid not null references users(id),
-    group_id      uuid not null references groups(id)
+    group_id      uuid not null references groups(id),
+
+    created_at    timestamptz                            not null default now(),
+    updated_at    timestamptz
 );
 
 -- And applying our `updated_at` trigger is as easy as this.
 SELECT trigger_updated_at('"user_groups"');
-
-
