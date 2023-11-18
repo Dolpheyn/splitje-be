@@ -3,20 +3,18 @@ use crate::{
     http::{Error, Result},
 };
 
-use sqlx::{self, Pool, Postgres, Transaction};
+use sqlx::{self, Postgres, Transaction};
 
 pub trait LedgerHandler {}
 
-pub struct Handler {
-    db: Pool<Postgres>,
-}
+pub struct Handler {}
 
 impl Handler {
-    pub fn new(db: Pool<Postgres>) -> Self {
-        Self { db }
+    pub fn new() -> Self {
+        Self {}
     }
 
-    pub async fn init_ledger_entries_inner(
+    pub async fn init_ledger_entries(
         &self,
         group_id: uuid::Uuid,
         user_id: uuid::Uuid,

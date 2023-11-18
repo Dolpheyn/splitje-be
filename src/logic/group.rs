@@ -20,19 +20,16 @@ pub trait GroupsHandler {
 
 pub struct Handler {
     db: Pool<Postgres>,
-    ledger_handler: Box<ledger::Handler>,
+    ledger_handler: ledger::Handler,
 }
 
 impl Handler {
     pub fn new(db: Pool<Postgres>, ledger_handler: ledger::Handler) -> Self {
-        Self {
-            db,
-            ledger_handler: Box::new(ledger_handler),
-        }
+        Self { db, ledger_handler }
     }
 
     // Add user `user` to group `group`,
-    // then initializes entries for `user` against other members of the group.
+    // then initializes ledger entries for `user` against other members of the group.
     pub async fn add_user_to_group(
         &self,
         user: &AuthUser,
@@ -48,6 +45,7 @@ impl Handler {
             to_sqlx_uuid(group_id),
         );
 
+        // Use given transaction if present, otherwise begin a new transaction.
         let user_group_id = if let Some(tx) = tx {
             let user_group_id = query
                 .fetch_one(&mut **tx)
@@ -68,7 +66,7 @@ impl Handler {
                 .collect::<Vec<_>>();
 
             self.ledger_handler
-                .init_ledger_entries_inner(group_id, user.user_id, other_users_in_group_ids, tx)
+                .init_ledger_entries(group_id, user.user_id, other_users_in_group_ids, tx)
                 .await?;
 
             user_group_id
@@ -93,12 +91,7 @@ impl Handler {
                 .collect::<Vec<_>>();
 
             self.ledger_handler
-                .init_ledger_entries_inner(
-                    group_id,
-                    user.user_id,
-                    other_users_in_group_ids,
-                    &mut tx,
-                )
+                .init_ledger_entries(group_id, user.user_id, other_users_in_group_ids, &mut tx)
                 .await?;
 
             tx.commit().await?;

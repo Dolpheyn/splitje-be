@@ -21,7 +21,6 @@ use axum::{
     Json, Router,
 };
 use futures::stream::StreamExt;
-use sqlx::{Postgres, Transaction};
 
 use std::str::FromStr;
 
@@ -57,7 +56,7 @@ async fn create_group(
     auth_user: AuthUser,
     Json(req): Json<GroupBody<NewGroup>>,
 ) -> Result<Json<GroupBody<Group>>> {
-    let handler = group::Handler::new(ctx.db.clone(), ledger::Handler::new(ctx.db.clone()));
+    let handler = group::Handler::new(ctx.db.clone(), ledger::Handler::new());
     let group = handler.create_group(req.group.name, auth_user).await?;
 
     Ok(Json(GroupBody { group }))
@@ -106,7 +105,7 @@ pub async fn get_users_by_group(
     auth_user: AuthUser,
     Path(group_id): Path<uuid::Uuid>,
 ) -> Result<Json<UserBody<Vec<User>>>> {
-    let handler = group::Handler::new(ctx.db.clone(), ledger::Handler::new(ctx.db.clone()));
+    let handler = group::Handler::new(ctx.db.clone(), ledger::Handler::new());
     if !is_user_in_group(ctx.clone(), Path(auth_user.user_id), Path(group_id))
         .await?
         .0
@@ -125,7 +124,7 @@ async fn add_user_to_group(
     auth_user: AuthUser,
     Path(group_id): Path<uuid::Uuid>,
 ) -> Result<Json<uuid::Uuid>> {
-    let handler = group::Handler::new(ctx.db.clone(), ledger::Handler::new(ctx.db.clone()));
+    let handler = group::Handler::new(ctx.db.clone(), ledger::Handler::new());
 
     handler
         .add_user_to_group(
@@ -137,7 +136,7 @@ async fn add_user_to_group(
             None,
         )
         .await
-        .map(|uuid| Json(uuid))
+        .map(Json)
 }
 
 async fn find_group_by_id(
