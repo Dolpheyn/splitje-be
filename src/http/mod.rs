@@ -1,13 +1,15 @@
 use crate::config::Config;
+
 use anyhow::Context;
 use axum::{extract::Extension, Router};
 use sqlx::PgPool;
-use std::sync::Arc;
 use tower::ServiceBuilder;
 use tower_http::{
     request_id::{MakeRequestId, RequestId},
     ServiceBuilderExt,
 };
+
+use std::sync::Arc;
 
 // Utility modules.
 

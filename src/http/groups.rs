@@ -1,17 +1,22 @@
-use std::str::FromStr;
+use super::{
+    extractor::{to_sqlx_uuid, to_uuid, AuthUser},
+    users::{is_user_in_group, User, UserBody},
+};
+use crate::http::{
+    error::{Error, ResultExt},
+    ApiContext, Result,
+};
 
-use crate::http::{ApiContext, Result};
 use anyhow::anyhow;
-use axum::extract::{Extension, Path};
-use axum::routing::{get, post};
-use axum::{Json, Router};
+use axum::{
+    extract::{Extension, Path},
+    routing::{get, post},
+    Json, Router,
+};
 use futures::stream::StreamExt;
 use sqlx::{Postgres, Transaction};
 
-use crate::http::error::{Error, ResultExt};
-
-use super::extractor::{to_sqlx_uuid, to_uuid, AuthUser};
-use super::users::{is_user_in_group, User, UserBody};
+use std::str::FromStr;
 
 pub fn router() -> Router {
     Router::new()

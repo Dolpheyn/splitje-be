@@ -1,7 +1,7 @@
-use serde::de::Visitor;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use std::fmt::Formatter;
+use serde::{de::Visitor, Deserialize, Deserializer, Serialize, Serializer};
 use time::{Format, OffsetDateTime};
+
+use std::fmt::Formatter;
 
 /// `OffsetDateTime` provides RFC-3339 (ISO-8601 subset) serialization, but the default
 /// `serde::Serialize` implementation produces array of integers, which is great for binary

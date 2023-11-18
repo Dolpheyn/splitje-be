@@ -1,9 +1,8 @@
+use sharoomies::{config::Config, http};
+
 use anyhow::Context;
 use clap::Parser;
 use sqlx::postgres::PgPoolOptions;
-
-use sharoomies::config::Config;
-use sharoomies::http;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

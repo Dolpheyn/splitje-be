@@ -1,20 +1,24 @@
-use crate::http::{ApiContext, Result};
+use super::{
+    extractor::{to_sqlx_uuid, to_uuid},
+    groups::{self, Group, GroupBody},
+};
+use crate::http::{
+    error::{Error, ResultExt},
+    extractor::AuthUser,
+    ApiContext, Result,
+};
+
 use anyhow::{anyhow, Context};
-use argon2::password_hash::SaltString;
-use argon2::{Argon2, PasswordHash};
-use axum::body::HttpBody;
-use axum::extract::{Extension, Path};
-use axum::routing::{get, post};
-use axum::{Json, Router};
+use argon2::{password_hash::SaltString, Argon2, PasswordHash};
+use axum::{
+    body::HttpBody,
+    extract::{Extension, Path},
+    routing::{get, post},
+    Json, Router,
+};
 use base64::{engine::general_purpose, Engine as _};
 use hyper::Client;
 use hyper_tls::HttpsConnector;
-
-use crate::http::error::{Error, ResultExt};
-use crate::http::extractor::AuthUser;
-
-use super::extractor::{to_sqlx_uuid, to_uuid};
-use super::groups::{self, Group, GroupBody};
 
 pub fn router() -> Router {
     Router::new()

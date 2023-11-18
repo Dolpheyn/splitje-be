@@ -1,8 +1,10 @@
-use axum::http::header::WWW_AUTHENTICATE;
-use axum::http::{HeaderMap, HeaderValue, StatusCode};
-use axum::response::{IntoResponse, Response};
-use axum::Json;
+use axum::{
+    http::{header::WWW_AUTHENTICATE, HeaderMap, HeaderValue, StatusCode},
+    response::{IntoResponse, Response},
+    Json,
+};
 use sqlx::error::DatabaseError;
+
 use std::borrow::Cow;
 use std::collections::HashMap;
 

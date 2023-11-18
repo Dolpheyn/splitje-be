@@ -1,17 +1,21 @@
-use std::collections::HashMap;
-use std::fmt::Display;
+use super::{
+    extractor::{to_sqlx_uuid, to_uuid, AuthUser},
+    users,
+};
+use crate::http::{
+    error::{Error, ResultExt},
+    ApiContext, Result,
+};
 
 use anyhow::anyhow;
-use axum::extract::{Extension, Path};
-use axum::routing::post;
-use axum::{Json, Router};
+use axum::{
+    extract::{Extension, Path},
+    routing::post,
+    Json, Router,
+};
 use serde_json::to_value as to_json_value;
 
-use crate::http::error::{Error, ResultExt};
-use crate::http::{ApiContext, Result};
-
-use super::extractor::{to_sqlx_uuid, to_uuid, AuthUser};
-use super::users;
+use std::{collections::HashMap, fmt::Display};
 
 pub fn router() -> Router {
     Router::new().route("/v1/transactions", post(create_transaction))
@@ -122,6 +126,7 @@ async fn create_transaction(
         return Err(Error::Forbidden);
     }
 
+    // Prepare metadata and amount
     let req_metadata = req.transaction.metadata.unwrap_or_default();
     let metadata_json = to_json_value(req_metadata.clone()).map_err(|e| {
         log::error!("[create_transaction] fail converting metadata to json {e:?}");
@@ -134,6 +139,7 @@ async fn create_transaction(
         req.transaction.amount
     };
 
+    // Do db operations
     let mut tx = ctx.db.begin().await?;
     let txn_id = sqlx::query_scalar!(
         r#"
