@@ -11,7 +11,11 @@ use sqlx::{self, Pool, Postgres, Transaction};
 use super::ledger::{self};
 
 pub trait GroupsHandler {
-    async fn create_group(&self, name: String, owner: AuthUser) -> Result<Group, Error>;
+    fn create_group(
+        &self,
+        name: String,
+        owner: AuthUser,
+    ) -> impl std::future::Future<Output = Result<Group, Error>> + Send;
 }
 
 pub struct Handler {
