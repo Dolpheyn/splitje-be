@@ -1,10 +1,10 @@
-use super::{
-    extractor::{to_sqlx_uuid, to_uuid, AuthUser},
-    users,
-};
-use crate::http::{
-    error::{Error, ResultExt},
-    ApiContext, Result,
+use super::{extractor::AuthUser, users};
+use crate::{
+    commons::{to_sqlx_uuid, to_uuid},
+    http::{
+        error::{Error, ResultExt},
+        ApiContext, Result,
+    },
 };
 
 use anyhow::anyhow;

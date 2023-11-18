@@ -20,7 +20,7 @@ mod error;
 /// such as `AuthUser` which checks for the `Authorization: Token <token>` header in the request,
 /// verifies `<token>` as a JWT and checks the signature,
 /// then deserializes the information it contains.
-mod extractor;
+pub mod extractor;
 
 /// A catch-all module for other common types in the API. Arguably, the `error` and `extractor`
 /// modules could have been children of this one, but that's more of a subjective decision.

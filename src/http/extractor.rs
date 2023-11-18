@@ -11,14 +11,6 @@ use jwt::{SignWithKey, VerifyWithKey};
 use sha2::Sha384;
 use time::OffsetDateTime;
 
-pub fn to_sqlx_uuid(id: uuid::Uuid) -> sqlx::types::Uuid {
-    sqlx::types::Uuid::from_bytes(*id.as_bytes())
-}
-
-pub fn to_uuid(id: sqlx::types::Uuid) -> uuid::Uuid {
-    uuid::Uuid::from_bytes(*id.as_bytes())
-}
-
 const DEFAULT_SESSION_LENGTH: time::Duration = time::Duration::weeks(2);
 
 const SCHEME_PREFIX: &str = "Bearer ";

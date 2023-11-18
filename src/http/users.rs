@@ -1,11 +1,12 @@
-use super::{
-    extractor::{to_sqlx_uuid, to_uuid},
-    groups::{self, Group, GroupBody},
-};
-use crate::http::{
-    error::{Error, ResultExt},
-    extractor::AuthUser,
-    ApiContext, Result,
+use super::groups::{self, GroupBody};
+use crate::{
+    commons::{to_sqlx_uuid, to_uuid},
+    dto::group::Group,
+    http::{
+        error::{Error, ResultExt},
+        extractor::AuthUser,
+        ApiContext, Result,
+    },
 };
 
 use anyhow::{anyhow, Context};
@@ -62,13 +63,6 @@ struct CurrentUser {
     token: String,
     username: String,
     image: Option<String>,
-}
-
-#[derive(serde::Serialize, serde::Deserialize)]
-pub struct User {
-    pub id: uuid::Uuid,
-    pub email: String,
-    pub username: String,
 }
 
 async fn create_user(
