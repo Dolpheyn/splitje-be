@@ -199,7 +199,7 @@ async fn add_user_to_group_inner(
         to_sqlx_uuid(group_id),
     );
 
-    let user_group_id = if let Some(mut tx) = tx {
+    let user_group_id = if let Some(tx) = tx {
         let user_group_id = query
             .fetch_one(&mut **tx)
             .await
@@ -210,7 +210,8 @@ async fn add_user_to_group_inner(
                 Error::unprocessable_entity([("group", "group does not exist")])
             })?;
 
-        create_ledger_entries(ctx, group_id, auth_user.user_id, &mut tx).await?;
+        create_ledger_entries(ctx, group_id, auth_user.user_id, tx).await?;
+
         user_group_id
     } else {
         let mut tx = ctx.db.begin().await?;
@@ -227,6 +228,7 @@ async fn add_user_to_group_inner(
         create_ledger_entries(ctx, group_id, auth_user.user_id, &mut tx).await?;
 
         tx.commit().await?;
+
         user_group_id
     };
 
@@ -257,7 +259,7 @@ async fn create_ledger_entries(
     let left_side_ids = other_users_in_group_ids
         .iter()
         .chain(
-            vec![user_id]
+            [user_id]
                 .iter()
                 .cycle()
                 .take(other_users_in_group_ids.len()),
@@ -268,7 +270,7 @@ async fn create_ledger_entries(
     log::debug!("left: {:?}", left_side_ids);
 
     //[user_id * len(current_users), ...current_users, ]
-    let right_side_ids = vec![user_id]
+    let right_side_ids = [user_id]
         .iter()
         .cycle()
         .take(other_users_in_group_ids.len())

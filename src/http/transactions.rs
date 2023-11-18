@@ -129,7 +129,7 @@ async fn create_transaction(
     })?;
 
     let amount = if TxType::Debit == req.transaction.tx_type {
-        req.transaction.amount * -1
+        -req.transaction.amount
     } else {
         req.transaction.amount
     };

@@ -48,7 +48,7 @@ struct AuthUserClaims {
 }
 
 impl AuthUser {
-    pub(in crate::http) fn to_jwt(&self, ctx: &ApiContext) -> String {
+    pub(in crate::http) fn to_jwt(self, ctx: &ApiContext) -> String {
         let hmac = Hmac::<Sha384>::new_from_slice(ctx.config.hmac_key.as_bytes())
             .expect("HMAC-SHA-384 can accept any key length");
 
@@ -140,7 +140,7 @@ impl AuthUser {
 
 impl MaybeAuthUser {
     /// If this is `Self(Some(AuthUser))`, return `AuthUser::user_id`
-    pub fn user_id(&self) -> Option<uuid::Uuid> {
+    pub fn uuid(&self) -> Option<uuid::Uuid> {
         self.0.as_ref().map(|auth_user| auth_user.user_id)
     }
 }

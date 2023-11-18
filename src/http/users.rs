@@ -153,7 +153,7 @@ async fn get_current_user(
         e => Error::Sqlx(e),
     })?;
 
-    dbg!("auth user", auth_user.clone());
+    dbg!("auth user", auth_user);
     Ok(Json(UserBody {
         user: CurrentUser {
             id: auth_user.user_id.to_string(),
@@ -220,7 +220,7 @@ async fn get_user_groups(
     auth_user: AuthUser,
     Path(user_id): Path<uuid::Uuid>,
 ) -> Result<Json<GroupBody<Vec<Group>>>> {
-    Ok(groups::get_groups_by_user(ctx, auth_user, Path(user_id)).await?)
+    groups::get_groups_by_user(ctx, auth_user, Path(user_id)).await
 }
 
 pub async fn is_user_in_group(
@@ -235,18 +235,18 @@ pub async fn is_user_in_group(
 }
 
 async fn hash_password(password: String) -> Result<String> {
-    Ok(tokio::task::spawn_blocking(move || -> Result<String> {
+    tokio::task::spawn_blocking(move || -> Result<String> {
         let salt = SaltString::generate(rand::thread_rng());
         Ok(PasswordHash::generate(Argon2::default(), password, &salt)
             .map_err(|e| anyhow::anyhow!("failed to generate password hash: {}", e))?
             .to_string())
     })
     .await
-    .context("panic in generating password hash")??)
+    .context("panic in generating password hash")?
 }
 
 async fn verify_password(password: String, password_hash: String) -> Result<()> {
-    Ok(tokio::task::spawn_blocking(move || -> Result<()> {
+    tokio::task::spawn_blocking(move || -> Result<()> {
         let hash = PasswordHash::new(&password_hash)
             .map_err(|e| anyhow::anyhow!("invalid password hash: {}", e))?;
 
@@ -257,7 +257,7 @@ async fn verify_password(password: String, password_hash: String) -> Result<()> 
             })
     })
     .await
-    .context("panic in verifying password hash")??)
+    .context("panic in verifying password hash")?
 }
 
 async fn get_base64_encoded_svg_image_for_user(email: &String) -> Result<String> {

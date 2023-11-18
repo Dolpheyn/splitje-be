@@ -93,7 +93,7 @@ pub async fn serve(config: Config, db: PgPool) -> anyhow::Result<()> {
                 config: Arc::new(config),
                 db,
             }))
-            .set_x_request_id(UuidRequestId::default())
+            .set_x_request_id(UuidRequestId)
             .propagate_x_request_id()
             // Enables logging. Use `RUST_LOG=tower_http=debug`
             .layer(
