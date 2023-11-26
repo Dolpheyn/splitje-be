@@ -1,7 +1,7 @@
-use super::groups::{self, GroupBody};
+use super::groups;
 use crate::{
     commons::{to_sqlx_uuid, to_uuid},
-    dto::group::Group,
+    dto::group::{Group, GroupBody},
     http::{
         error::{Error, ResultExt},
         extractor::AuthUser,

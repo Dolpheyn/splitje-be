@@ -16,6 +16,19 @@ pub trait GroupsHandler {
         name: String,
         owner: AuthUser,
     ) -> impl std::future::Future<Output = Result<Group, Error>> + Send;
+
+    fn add_user_to_group(
+        &self,
+        user: &AuthUser,
+        group: &Group,
+        tx: Option<&mut Transaction<'_, Postgres>>,
+    ) -> impl std::future::Future<Output = Result<uuid::Uuid, Error>> + Send;
+
+    fn get_users_by_group(
+        &self,
+        group_id: &uuid::Uuid,
+        tx: Option<&mut Transaction<'_, Postgres>>,
+    ) -> impl std::future::Future<Output = Result<Vec<User>, Error>> + Send;
 }
 
 pub struct Handler {
@@ -27,10 +40,45 @@ impl Handler {
     pub fn new(db: Pool<Postgres>, ledger_handler: ledger::Handler) -> Self {
         Self { db, ledger_handler }
     }
+}
+
+impl GroupsHandler for Handler {
+    // Creates a group with `name` and add user `owner` to the group.
+    async fn create_group(&self, group_name: String, owner: AuthUser) -> Result<Group, Error> {
+        let mut tx = self.db.begin().await?;
+
+        let group_id = sqlx::query_scalar!(
+            r#"insert into "groups" (name) values ($1) returning id"#,
+            group_name,
+        )
+        .fetch_one(&mut *tx)
+        .await
+        .on_constraint("groups_name_key", |_| {
+            Error::unprocessable_entity([("group_name", "group name taken")])
+        })?;
+
+        let group = Group {
+            id: to_uuid(group_id),
+            name: group_name,
+        };
+
+        if let Err(e) = self.add_user_to_group(&owner, &group, Some(&mut tx)).await {
+            log::error!("[create_group] fail to add user to group: {e:?}");
+            let _ = tx.rollback().await;
+            return Err(Error::Anyhow(anyhow!("")));
+        };
+
+        tx.commit().await.map_err(|e| {
+            log::error!("[create_group] fail to commit db transaction: {e:?}");
+            Error::Anyhow(anyhow!(""))
+        })?;
+
+        Ok(group)
+    }
 
     // Add user `user` to group `group`,
     // then initializes ledger entries for `user` against other members of the group.
-    pub async fn add_user_to_group(
+    async fn add_user_to_group(
         &self,
         user: &AuthUser,
         group: &Group,
@@ -102,7 +150,7 @@ impl Handler {
         Ok(to_uuid(user_group_id))
     }
 
-    pub async fn get_users_by_group(
+    async fn get_users_by_group(
         &self,
         group_id: &uuid::Uuid,
         tx: Option<&mut Transaction<'_, Postgres>>,
@@ -141,40 +189,5 @@ impl Handler {
         }
 
         Ok(users.into_iter().map(Option::unwrap).collect())
-    }
-}
-
-impl GroupsHandler for Handler {
-    // Creates a group with `name` and add user `owner` to the group.
-    async fn create_group(&self, group_name: String, owner: AuthUser) -> Result<Group, Error> {
-        let mut tx = self.db.begin().await?;
-
-        let group_id = sqlx::query_scalar!(
-            r#"insert into "groups" (name) values ($1) returning id"#,
-            group_name,
-        )
-        .fetch_one(&mut *tx)
-        .await
-        .on_constraint("groups_name_key", |_| {
-            Error::unprocessable_entity([("group_name", "group name taken")])
-        })?;
-
-        let group = Group {
-            id: to_uuid(group_id),
-            name: group_name,
-        };
-
-        if let Err(e) = self.add_user_to_group(&owner, &group, Some(&mut tx)).await {
-            log::error!("[create_group] fail to add user to group: {e:?}");
-            let _ = tx.rollback().await;
-            return Err(Error::Anyhow(anyhow!("")));
-        };
-
-        tx.commit().await.map_err(|e| {
-            log::error!("[create_group] fail to commit db transaction: {e:?}");
-            Error::Anyhow(anyhow!(""))
-        })?;
-
-        Ok(group)
     }
 }

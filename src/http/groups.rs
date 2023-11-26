@@ -4,7 +4,7 @@ use super::{
 };
 use crate::{
     commons::{to_sqlx_uuid, to_uuid},
-    dto::group::Group,
+    dto::group::{Group, GroupBody, NewGroup, UpdateGroup},
     dto::user::User,
     http::{
         error::{Error, ResultExt},
@@ -32,23 +32,6 @@ pub fn router() -> Router {
             get(find_group_by_id).put(update_group),
         )
         .route("/v1/groups/:group_id/users", post(add_user_to_group))
-}
-
-/// A wrapper type for all requests/responses from this module.
-#[derive(serde::Serialize, serde::Deserialize)]
-pub struct GroupBody<T> {
-    pub group: T,
-}
-
-#[derive(serde::Deserialize)]
-struct NewGroup {
-    name: String,
-}
-
-#[derive(serde::Deserialize, Default, PartialEq, Eq)]
-#[serde(default)]
-struct UpdateGroup {
-    name: Option<String>,
 }
 
 async fn create_group(
