@@ -1,0 +1,24 @@
+
+services:
+  postgres:
+    container_name: splitje-bengkel-db-local
+    image: postgres
+    environment:
+      POSTGRES_DB: splitje
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: password
+      PGDATA: /data/postgres
+    volumes:
+      - postgres:/data/postgres
+    ports:
+      - "5432:5432"
+    networks:
+      - database
+    restart: unless-stopped
+
+networks:
+  database:
+    driver: bridge
+
+volumes:
+  postgres:
