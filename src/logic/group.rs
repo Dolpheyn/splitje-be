@@ -11,20 +11,20 @@ use sqlx::{self, Pool, Postgres, Transaction};
 use super::ledger::{self};
 
 pub trait GroupsHandler {
-    fn create_group(
+    pub fn create_group(
         &self,
         name: String,
         owner: AuthUser,
     ) -> impl std::future::Future<Output = Result<Group, Error>> + Send;
 
-    fn add_user_to_group(
+    pub fn add_user_to_group(
         &self,
         user: &AuthUser,
         group: &Group,
         tx: Option<&mut Transaction<'_, Postgres>>,
     ) -> impl std::future::Future<Output = Result<uuid::Uuid, Error>> + Send;
 
-    fn get_users_by_group(
+    pub fn get_users_by_group(
         &self,
         group_id: &uuid::Uuid,
         tx: Option<&mut Transaction<'_, Postgres>>,
