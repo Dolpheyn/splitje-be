@@ -1,10 +1,10 @@
 
 services:
   postgres:
-    container_name: splitje-db-local
+    container_name: splitje_development
     image: postgres
     environment:
-      POSTGRES_DB: splitje
+      POSTGRES_DB: splitje_development
       POSTGRES_USER: root
       POSTGRES_PASSWORD: password
       PGDATA: /data/postgres
